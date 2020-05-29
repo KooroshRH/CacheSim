@@ -1,15 +1,79 @@
+import java.util.HashMap;
+import java.util.Scanner;
+
 class Main{
     enum WritePolicy{
-        WRITE_BACK, WRITE_THROUGH;
+
+        WRITE_BACK("wb"),
+        WRITE_THROUGH("wt");
+
+        private String value;
+        private static HashMap map = new HashMap<>();
+
+        private WritePolicy(String value){
+            this.value = value;
+        }
+        static{
+            for (WritePolicy writePolicy : WritePolicy.values()) {
+                map.put(writePolicy.value, writePolicy);
+            }
+        }
+        public static WritePolicy valueof(String writePolicy) {
+            return (WritePolicy) map.get(writePolicy);
+        }
+        public String getValue(){
+            return value;
+        }
     }
 
     enum AllocatePolicy{
-        WRITE_ALLOCATION, NO_WRITE_ALLOCATION;
+
+        WRITE_ALLOCATION("wa"),
+        NO_WRITE_ALLOCATION("nw");
+
+        private String value;
+        private static HashMap map = new HashMap<>();
+
+        private AllocatePolicy(String value){
+            this.value = value;
+        }
+        static{
+            for (AllocatePolicy allocatePolicy : AllocatePolicy.values()) {
+                map.put(allocatePolicy.value, allocatePolicy);
+            }
+        }
+        public static AllocatePolicy valueof(String allocatePolicy) {
+            return (AllocatePolicy) map.get(allocatePolicy);
+        }
+        public String getValue(){
+            return value;
+        }
     }
 
     enum CacheMode{
-        UNIFIED, SEPARATED;
+
+        UNIFIED(0),
+        SEPARATED(1);
+
+        private int value;
+        private static HashMap map = new HashMap<>();
+
+        private CacheMode(int value){
+            this.value = value;
+        }
+        static{
+            for (CacheMode cacheMode : CacheMode.values()) {
+                map.put(cacheMode.value, cacheMode);
+            }
+        }
+        public static CacheMode valueOf(int cacheMode) {
+            return (CacheMode) map.get(cacheMode);
+        }
+        public int getValue(){
+            return value;
+        }
     }
+    
 
     class Cache{
         private CacheMode cacheMode;
@@ -31,13 +95,15 @@ class Main{
         private int allFetch;
         private int allCopies;
 
-        public Cache(CacheMode cacheMode, int cacheDataSize, int cacheInstructionSize, int blockSize, int associativity, WritePolicy writePolicy, AllocatePolicy allocatePolicy){
-            this.cacheMode = cacheMode;
+        public Cache(int cacheMode, int cacheDataSize, int cacheInstructionSize, int blockSize, int associativity, String writePolicy, String allocatePolicy){
+            this.cacheMode = CacheMode.valueOf(cacheMode);
             this.cacheDataSize = cacheDataSize;
             this.cacheInstructionSize = cacheInstructionSize;
+            this.blockSize =  blockSize;
             this.associativity = associativity;
-            this.writePolicy = writePolicy;
-            this.allocatePolicy = allocatePolicy;
+            this.writePolicy = WritePolicy.valueof(writePolicy);
+            this.allocatePolicy = AllocatePolicy.valueof(allocatePolicy);
+
 
             instructionsAccesses = 0;
             instructionsMisses = 0;
@@ -145,7 +211,16 @@ class Main{
     }
     public static void main(String[] args) {
         Main main = new Main();
-        Cache testCache = main.new Cache(CacheMode.UNIFIED, 256, 0, 32, 16, WritePolicy.WRITE_THROUGH, AllocatePolicy.NO_WRITE_ALLOCATION);
-        System.err.println(testCache);
+        Scanner scan = new Scanner(System.in);
+        String[] firstLine = scan.nextLine().split("-");
+        String[] secondLine = scan.nextLine().split("-");
+        Cache testCache;
+        
+        if(Integer.parseInt(firstLine[1].trim()) == 0){
+            testCache = main.new Cache(Integer.parseInt(firstLine[1].trim()), Integer.parseInt(secondLine[0].trim()), 0, Integer.parseInt(firstLine[0].trim()), Integer.parseInt(firstLine[2].trim()), firstLine[3].trim(), firstLine[4].trim());
+        } else{
+            testCache = main.new Cache(Integer.parseInt(firstLine[1].trim()), Integer.parseInt(secondLine[1].trim()), Integer.parseInt(secondLine[0].trim()), Integer.parseInt(firstLine[0].trim()), Integer.parseInt(firstLine[2].trim()), firstLine[3].trim(), firstLine[4].trim());
+        }
+        System.out.println(testCache);
     }
 }
