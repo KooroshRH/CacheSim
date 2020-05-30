@@ -166,6 +166,10 @@ class Main{
             return allocatePolicy;
         }
 
+        public void readCacheLine(int type, int address){
+            
+        }
+
         @Override
         public String toString() {
             String result = "***CACHE SETTINGS***\n";
@@ -207,6 +211,36 @@ class Main{
             result = result + "copies back: " + allCopies + "\n";
 
             return result;
+        }
+    }
+
+    class Block{
+        private boolean isValid;
+        private boolean isDirty;
+        private int tag;
+
+        public int getTag() {
+            return tag;
+        }
+
+        public boolean isDirty() {
+            return isDirty;
+        }
+
+        public boolean isValid() {
+            return isValid;
+        }
+
+        public void setDirty(boolean isDirty) {
+            this.isDirty = isDirty;
+        }
+
+        public void setTag(int tag) {
+            this.tag = tag;
+        }
+
+        public void setValid(boolean isValid) {
+            this.isValid = isValid;
         }
     }
     public static void main(String[] args) {
