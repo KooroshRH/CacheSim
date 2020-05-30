@@ -1,7 +1,14 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Scanner;
 
+import jdk.nashorn.internal.ir.Block;
+
 class Main{
+    HashMap<Integer, Integer> memory = new HashMap<>();//suspicious
     enum WritePolicy{
 
         WRITE_BACK("wb"),
@@ -95,6 +102,8 @@ class Main{
         private int allFetch;
         private int allCopies;
 
+        HashMap<Integer, Block> cache;
+
         public Cache(int cacheMode, int cacheDataSize, int cacheInstructionSize, int blockSize, int associativity, String writePolicy, String allocatePolicy){
             this.cacheMode = CacheMode.valueOf(cacheMode);
             this.cacheDataSize = cacheDataSize;
@@ -103,14 +112,16 @@ class Main{
             this.associativity = associativity;
             this.writePolicy = WritePolicy.valueof(writePolicy);
             this.allocatePolicy = AllocatePolicy.valueof(allocatePolicy);
+            cache = new HashMap<>();//use LinkedHashmap to make it faster
+
 
 
             instructionsAccesses = 0;
             instructionsMisses = 0;
             instructionsReplaces = 0;
 
-            dataAccesses = 7;
-            dataMisses = 5;
+            dataAccesses = 0;
+            dataMisses = 0;
             dataReplaces = 0;
 
             allFetch = 12;
@@ -166,8 +177,73 @@ class Main{
             return allocatePolicy;
         }
 
-        public void readCacheLine(int type, int address){
+        public void insertIntoCache(String hexAddress){//supposed as unified and direct map
+
+            dataAccesses++;
+            int intAddress = Integer.parseInt(hexAddress, 16);
+
+            int tag = (int)Math.floor((double)(intAddress / blockSize));
+            int index = tag % cacheDataSize;
+
+            if(cache.keySet().contains(index) && cache.get(index).getTag() == tag){//hit
+
+                return;
+
+            } else{//miss
+
+                if(cache.keySet().contains(index) && cache.get(index) != null){
+                    dataReplaces++;
+                }
+
+                dataMisses++;
+                Block block = new Block(true, false, tag);
+                cache.put(index, block);
+
+            }
             
+        }
+
+        public boolean hit(String hexAddress){
+
+            int intAddress = Integer.parseInt(hexAddress, 16);
+            int tag = (int)Math.floor((double)(intAddress / blockSize));
+            int index = tag % cacheDataSize;//can be in a method
+
+            if(cache.keySet().contains(index) && cache.get(index).getTag() == tag){
+                return true;
+            } else{
+                return false;
+            }
+
+        }
+
+        public void writeBackAllocate(String hexAddress){
+            dataAccesses++;
+
+            int intAddress = Integer.parseInt(hexAddress, 16);
+            int tag = (int)Math.floor((double)(intAddress / blockSize));
+            int index = tag % cacheDataSize;
+
+            if(hit(hexAddress)){
+                cache.get(index).setDirty(true);
+            } else{
+                dataMisses++;//right???
+                insertIntoCache(hexAddress);
+            }
+        }
+
+        public void writeBackNoAllocate(){
+            dataAccesses++;
+        }
+
+        public void writeThroughAllocate(){
+            dataAccesses++;
+
+        }
+
+        public void writeThroughNoAllocate(){
+            dataAccesses++;
+
         }
 
         @Override
@@ -219,6 +295,12 @@ class Main{
         private boolean isDirty;
         private int tag;
 
+        public Block(boolean isValid, boolean isDirty, int tag){
+            this.isValid = isValid;
+            this.isDirty = isDirty;
+            this.tag = tag;
+        }
+
         public int getTag() {
             return tag;
         }
@@ -255,6 +337,27 @@ class Main{
         } else{
             testCache = main.new Cache(Integer.parseInt(firstLine[1].trim()), Integer.parseInt(secondLine[1].trim()), Integer.parseInt(secondLine[0].trim()), Integer.parseInt(firstLine[0].trim()), Integer.parseInt(firstLine[2].trim()), firstLine[3].trim(), firstLine[4].trim());
         }
+        
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String input;
+    
+        try{
+            while(!(input = br.readLine()).equals("")){
+                
+                if(input.split("")[0].equals("0")){
+                    testCache.insertIntoCache(input.split(" ")[1]);
+                } else if(input.split("")[0].equals("1")){
+                    testCache.writeBackAllocate(input.split(" ")[1]);
+                } else{
+                    //insrtuction
+                }
+            }
+        } catch(IOException e){
+            e.printStackTrace();
+        }
         System.out.println(testCache);
+        //3 ta if mizarim ke input.split[0] ro tashkhis bede va tasimim begire
+        
+        
     }
 }
