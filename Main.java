@@ -102,7 +102,7 @@ class Main{
         private int allFetch;
         private int allCopies;
 
-        HashMap<Integer, Block> cache;
+        HashMap<Integer, LinkedList<Block>> cache;
 
         public Cache(int cacheMode, int cacheDataSize, int cacheInstructionSize, int blockSize, int associativity, String writePolicy, String allocatePolicy){
             this.cacheMode = CacheMode.valueOf(cacheMode);
@@ -177,28 +177,39 @@ class Main{
             return allocatePolicy;
         }
 
-        public void insertIntoCache(String hexAddress){//supposed as unified and direct map
+        public void insertIntoCache(String hexAddress){//supposed as unified
 
             dataAccesses++;
             int intAddress = Integer.parseInt(hexAddress, 16);
 
             int tag = (int)Math.floor((double)(intAddress / blockSize));
-            int index = tag % cacheDataSize;
+            int index = tag % (cacheDataSize / (blockSize * associativity));
+            Block block = new Block(true, false, tag);
 
-            if(cache.keySet().contains(index) && cache.get(index).getTag() == tag){//hit
 
-                return;
-
-            } else{//miss
-
-                if(cache.keySet().contains(index) && cache.get(index) != null){
-                    dataReplaces++;
+            if(cache.keySet().contains(index)){
+                for (Block bl : cache.get(index)) {
+                    if(bl.getTag() == tag){//hit
+                        cache.get(index).remove(bl);
+                        cache.get(index).addLast(bl);
+                        return;
+                    }
                 }
 
-                dataMisses++;
-                Block block = new Block(true, false, tag);
-                cache.put(index, block);
+                if(cache.get(index).size() == associativity){
+                    dataMisses++;
+                    dataReplaces++;
+                    cache.get(index).removeFirst();
+                    cache.get(index).addLast(block);
 
+                } else if(cache.get(index).size() < associativity){
+                    dataMisses++;
+                    cache.get(index).addLast(block);
+                }
+            } else{
+                dataMisses++;
+                cache.put(index, new LinkedList<>());
+                cache.get(index).add(block);
             }
             
         }
@@ -206,28 +217,40 @@ class Main{
         public boolean hit(String hexAddress){
 
             int intAddress = Integer.parseInt(hexAddress, 16);
-            int tag = (int)Math.floor((double)(intAddress / blockSize));
-            int index = tag % cacheDataSize;//can be in a method
 
-            if(cache.keySet().contains(index) && cache.get(index).getTag() == tag){
-                return true;
-            } else{
+            int tag = (int)Math.floor((double)(intAddress / blockSize));
+            int index = tag % (cacheDataSize / (blockSize * associativity));
+
+            if(cache.keySet().contains(index)){
+                for (Block bl : cache.get(index)) {
+                    if(bl.getTag() == tag){//hit
+                        return true;
+                    }
+                }
+                return false;
+            } else{//miss
                 return false;
             }
 
         }
 
         public void writeBackAllocate(String hexAddress){
-            dataAccesses++;
-
+            
             int intAddress = Integer.parseInt(hexAddress, 16);
+
             int tag = (int)Math.floor((double)(intAddress / blockSize));
-            int index = tag % cacheDataSize;
+            int index = tag % (cacheDataSize / (blockSize * associativity));
 
             if(hit(hexAddress)){
-                cache.get(index).setDirty(true);
+                dataAccesses++;
+                for (Block bl : cache.get(index)) {
+                    if(bl.getTag() == tag){//hit
+                        bl.setDirty(true);
+                        break;
+                    }
+                }
             } else{
-                dataMisses++;//right???
+                
                 insertIntoCache(hexAddress);
             }
         }
@@ -356,7 +379,7 @@ class Main{
             e.printStackTrace();
         }
         System.out.println(testCache);
-        //3 ta if mizarim ke input.split[0] ro tashkhis bede va tasimim begire
+        
         
         
     }
