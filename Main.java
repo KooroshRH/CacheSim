@@ -102,7 +102,8 @@ class Main{
         private int allFetch;
         private int allCopies;
 
-        HashMap<Integer, LinkedList<Block>> cache;
+        HashMap<Integer, LinkedList<Block>> dataCache;
+        HashMap<Integer, LinkedList<Block>> instructionCache;
 
         public Cache(int cacheMode, int cacheDataSize, int cacheInstructionSize, int blockSize, int associativity, String writePolicy, String allocatePolicy){
             this.cacheMode = CacheMode.valueOf(cacheMode);
@@ -112,7 +113,10 @@ class Main{
             this.associativity = associativity;
             this.writePolicy = WritePolicy.valueof(writePolicy);
             this.allocatePolicy = AllocatePolicy.valueof(allocatePolicy);
-            cache = new HashMap<>();//use LinkedHashmap to make it faster
+            dataCache = new HashMap<>();//use LinkedHashmap to make it faster
+            if(cacheMode == 1){
+                instructionCache = new HashMap<>();
+            }
 
 
 
@@ -177,52 +181,84 @@ class Main{
             return allocatePolicy;
         }
 
-        public void insertIntoCache(String hexAddress){//supposed as unified
+        public void insertIntoCache(String hexAddress, int hint){//supposed as unified
 
-            dataAccesses++;
+            if(hint == 0){
+                dataAccesses++;
+            } else{
+                instructionsAccesses++;
+            }
+            
+            
             int intAddress = Integer.parseInt(hexAddress, 16);
 
             int tag = (int)Math.floor((double)(intAddress / blockSize));
             int index = tag % (cacheDataSize / (blockSize * associativity));
             Block block = new Block(true, false, tag);
 
-
-            if(cache.keySet().contains(index)){
-                for (Block bl : cache.get(index)) {
-                    if(bl.getTag() == tag){//hit
-                        cache.get(index).remove(bl);
-                        cache.get(index).addLast(bl);
-                        return;
+            if(hint == 0){
+                if(dataCache.keySet().contains(index)){
+                    for (Block bl : dataCache.get(index)) {
+                        if(bl.getTag() == tag){//hit
+                            dataCache.get(index).remove(bl);
+                            dataCache.get(index).addLast(bl);
+                            return;
+                        }
                     }
-                }
-
-                if(cache.get(index).size() == associativity){
+    
+                    if(dataCache.get(index).size() == associativity){
+                        dataMisses++;
+                        dataReplaces++;
+                        dataCache.get(index).removeFirst();
+                        dataCache.get(index).addLast(block);
+    
+                    } else if(dataCache.get(index).size() < associativity){
+                        dataMisses++;
+                        dataCache.get(index).addLast(block);
+                    }
+                } else{
                     dataMisses++;
-                    dataReplaces++;
-                    cache.get(index).removeFirst();
-                    cache.get(index).addLast(block);
-
-                } else if(cache.get(index).size() < associativity){
-                    dataMisses++;
-                    cache.get(index).addLast(block);
+                    dataCache.put(index, new LinkedList<>());
+                    dataCache.get(index).add(block);
                 }
             } else{
-                dataMisses++;
-                cache.put(index, new LinkedList<>());
-                cache.get(index).add(block);
+                if(instructionCache.keySet().contains(index)){
+                    for (Block bl : instructionCache.get(index)) {
+                        if(bl.getTag() == tag){//hit
+                            instructionCache.get(index).remove(bl);
+                            instructionCache.get(index).addLast(bl);
+                            return;
+                        }
+                    }
+    
+                    if(instructionCache.get(index).size() == associativity){
+                        instructionsMisses++;
+                        instructionsMisses++;
+                        instructionCache.get(index).removeFirst();
+                        instructionCache.get(index).addLast(block);
+    
+                    } else if(instructionCache.get(index).size() < associativity){
+                        instructionsMisses++;
+                        instructionCache.get(index).addLast(block);
+                    }
+                } else{
+                    instructionsMisses++;
+                    instructionCache.put(index, new LinkedList<>());
+                    instructionCache.get(index).add(block);
+                }
             }
             
         }
 
-        public boolean hit(String hexAddress){
+        public boolean hit(String hexAddress){//can be used in insertInToCache or be just for write
 
             int intAddress = Integer.parseInt(hexAddress, 16);
 
             int tag = (int)Math.floor((double)(intAddress / blockSize));
             int index = tag % (cacheDataSize / (blockSize * associativity));
 
-            if(cache.keySet().contains(index)){
-                for (Block bl : cache.get(index)) {
+            if(dataCache.keySet().contains(index)){
+                for (Block bl : dataCache.get(index)) {
                     if(bl.getTag() == tag){//hit
                         return true;
                     }
@@ -243,7 +279,7 @@ class Main{
 
             if(hit(hexAddress)){
                 dataAccesses++;
-                for (Block bl : cache.get(index)) {
+                for (Block bl : dataCache.get(index)) {
                     if(bl.getTag() == tag){//hit
                         bl.setDirty(true);
                         break;
@@ -251,7 +287,7 @@ class Main{
                 }
             } else{
                 
-                insertIntoCache(hexAddress);
+                insertIntoCache(hexAddress, 0);
             }
         }
 
@@ -368,11 +404,11 @@ class Main{
             while(!(input = br.readLine()).equals("")){
                 
                 if(input.split("")[0].equals("0")){
-                    testCache.insertIntoCache(input.split(" ")[1]);
+                    testCache.insertIntoCache(input.split(" ")[1], Integer.parseInt(input.split("")[0]));
                 } else if(input.split("")[0].equals("1")){
                     testCache.writeBackAllocate(input.split(" ")[1]);
                 } else{
-                    //insrtuction
+                    testCache.insertIntoCache(input.split(" ")[1], Integer.parseInt(input.split("")[0]));
                 }
             }
         } catch(IOException e){
