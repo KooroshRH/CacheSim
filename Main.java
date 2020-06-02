@@ -116,10 +116,9 @@ class Main{
             this.allocatePolicy = AllocatePolicy.valueof(allocatePolicy);
 
             dataCache = new HashMap<Integer, LinkedList<Block>>(); //use LinkedHashmap to make it faster
-            instructionCache = new HashMap<Integer, LinkedList<Block>>();
-            // if(cacheMode == CacheMode.SEPARATED.value){
-            //     instructionCache = new HashMap<Integer, LinkedList<Block>>();
-            // }
+            if(cacheMode == CacheMode.SEPARATED.value){
+                instructionCache = new HashMap<Integer, LinkedList<Block>>();
+            }
 
             instructionsAccesses = 0;
             instructionsMisses = 0;
@@ -143,15 +142,16 @@ class Main{
                 instructionsAccesses++;
             }
             
-            int intAddress = Integer.parseInt(hexAddress, 16);
-
-            int tag = (int)Math.floor((double)(intAddress / blockSize));
-            int index = tag % (cacheDataSize / (blockSize * associativity));
-            Block block = new Block(true, false, tag);
-            if(writePolicy.equals(WritePolicy.WRITE_BACK) && allocatePolicy.equals(AllocatePolicy.WRITE_ALLOCATION) && isWriting){
-                block.setDirty(true);
-            }
             if(request == 0){
+                int intAddress = Integer.parseInt(hexAddress, 16);
+
+                int tag = (int)Math.floor((double)(intAddress / blockSize));
+                int index = tag % (cacheDataSize / (blockSize * associativity));
+                Block block = new Block(true, false, tag);
+                if(writePolicy.equals(WritePolicy.WRITE_BACK) && allocatePolicy.equals(AllocatePolicy.WRITE_ALLOCATION) && isWriting){
+                    block.setDirty(true);
+                }
+
                 if(dataCache.keySet().contains(index)){
                     for (Block bl : dataCache.get(index)) {
                         if(bl.getTag() == tag){ // here hit occures
@@ -185,39 +185,93 @@ class Main{
                     dataCache.put(index, new LinkedList<Block>());
                     dataCache.get(index).add(block);
                 }
-            } else{
-                if(instructionCache.keySet().contains(index)){
-                    for (Block bl : instructionCache.get(index)) {
-                        if(bl.getTag() == tag){// here hit occures
-                            instructionCache.get(index).remove(bl);
-                            instructionCache.get(index).addLast(bl);
-                            return;
-                        }
+            } else {
+                if(cacheMode.equals(CacheMode.SEPARATED.value)){
+                    int intAddress = Integer.parseInt(hexAddress, 16);
+
+                    int tag = (int)Math.floor((double)(intAddress / blockSize));
+                    int index = tag % (cacheInstructionSize / (blockSize * associativity));
+                    Block block = new Block(true, false, tag);
+                    if(writePolicy.equals(WritePolicy.WRITE_BACK) && allocatePolicy.equals(AllocatePolicy.WRITE_ALLOCATION) && isWriting){
+                        block.setDirty(true);
                     }
-                    
-                    // in this if else we face miss in read
-                    if(instructionCache.get(index).size() == associativity){
-                        instructionsMisses++;
-                        instructionsReplaces++;
-                        allFetch++;
-                        Block deletingBlock = instructionCache.get(index).removeFirst();
-                        if(writePolicy.equals(WritePolicy.WRITE_BACK)){
-                            if(deletingBlock.isDirty()){
-                                allCopies += (blockSize/4);
-                                deletingBlock.setDirty(false);
+
+                    if(instructionCache.keySet().contains(index)){
+                        for (Block bl : instructionCache.get(index)) {
+                            if(bl.getTag() == tag){// here hit occures
+                                instructionCache.get(index).remove(bl);
+                                instructionCache.get(index).addLast(bl);
+                                return;
                             }
                         }
-                        instructionCache.get(index).addLast(block);
-                    } else if(instructionCache.get(index).size() < associativity){
+                        
+                        // in this if else we face miss in read
+                        if(instructionCache.get(index).size() == associativity){
+                            instructionsMisses++;
+                            instructionsReplaces++;
+                            allFetch++;
+                            Block deletingBlock = instructionCache.get(index).removeFirst();
+                            if(writePolicy.equals(WritePolicy.WRITE_BACK)){
+                                if(deletingBlock.isDirty()){
+                                    allCopies += (blockSize/4);
+                                    deletingBlock.setDirty(false);
+                                }
+                            }
+                            instructionCache.get(index).addLast(block);
+                        } else if(instructionCache.get(index).size() < associativity){
+                            instructionsMisses++;
+                            allFetch++;
+                            instructionCache.get(index).addLast(block);
+                        }
+                    } else {// when totally address doesn't exsits
                         instructionsMisses++;
                         allFetch++;
-                        instructionCache.get(index).addLast(block);
+                        instructionCache.put(index, new LinkedList<Block>());
+                        instructionCache.get(index).add(block);
                     }
-                } else {// when totally address doesn't exsits
-                    instructionsMisses++;
-                    allFetch++;
-                    instructionCache.put(index, new LinkedList<Block>());
-                    instructionCache.get(index).add(block);
+                } else {
+                    int intAddress = Integer.parseInt(hexAddress, 16);
+
+                    int tag = (int)Math.floor((double)(intAddress / blockSize));
+                    int index = tag % (cacheDataSize / (blockSize * associativity));
+                    Block block = new Block(true, false, tag);
+                    if(writePolicy.equals(WritePolicy.WRITE_BACK) && allocatePolicy.equals(AllocatePolicy.WRITE_ALLOCATION) && isWriting){
+                        block.setDirty(true);
+                    }
+
+                    if(dataCache.keySet().contains(index)){
+                        for (Block bl : dataCache.get(index)) {
+                            if(bl.getTag() == tag){// here hit occures
+                                dataCache.get(index).remove(bl);
+                                dataCache.get(index).addLast(bl);
+                                return;
+                            }
+                        }
+                        
+                        // in this if else we face miss in read
+                        if(dataCache.get(index).size() == associativity){
+                            instructionsMisses++;
+                            instructionsReplaces++;
+                            allFetch++;
+                            Block deletingBlock = dataCache.get(index).removeFirst();
+                            if(writePolicy.equals(WritePolicy.WRITE_BACK)){
+                                if(deletingBlock.isDirty()){
+                                    allCopies += (blockSize/4);
+                                    deletingBlock.setDirty(false);
+                                }
+                            }
+                            dataCache.get(index).addLast(block);
+                        } else if(dataCache.get(index).size() < associativity){
+                            instructionsMisses++;
+                            allFetch++;
+                            dataCache.get(index).addLast(block);
+                        }
+                    } else {// when totally address doesn't exsits
+                        instructionsMisses++;
+                        allFetch++;
+                        dataCache.put(index, new LinkedList<Block>());
+                        dataCache.get(index).add(block);
+                    }
                 }
             }
             
@@ -269,18 +323,16 @@ class Main{
             int index = tag % (cacheDataSize / (blockSize * associativity));
 
             if(hit(hexAddress)){
-                dataAccesses++;
                 for (Block block : dataCache.get(index)) {
                     if(block.getTag() == tag){//hit
                         block.setDirty(true);
                         break;
                     }
                 }
-            } else {
-                isWriting = true;
-                insertIntoCache(hexAddress, 0);
-                isWriting = false;
             }
+            isWriting = true;
+            insertIntoCache(hexAddress, 0);
+            isWriting = false;
         }
 
         private void writeBackNoAllocate(String hexAddress){
@@ -289,7 +341,6 @@ class Main{
             int tag = (int)Math.floor((double)(intAddress / blockSize));
             int index = tag % (cacheDataSize / (blockSize * associativity));
 
-            dataAccesses++;
             if(hit(hexAddress)){
                 for (Block block : dataCache.get(index)) {
                     if(block.getTag() == tag){//hit
@@ -297,7 +348,9 @@ class Main{
                         break;
                     }
                 }
+                insertIntoCache(hexAddress, 0);
             } else {
+                dataAccesses++;
                 dataMisses++;
                 allCopies++;
             }
@@ -305,18 +358,16 @@ class Main{
 
         private void writeThroughAllocate(String hexAddress){
             allCopies++;
-            if(hit(hexAddress)){
-                dataAccesses++;
-            } else {
-                insertIntoCache(hexAddress, 0);
-            }
+            insertIntoCache(hexAddress, 0);
         }
 
         private void writeThroughNoAllocate(String hexAddress){
             allCopies++;
-            dataAccesses++;
             if(!hit(hexAddress)){
+                dataAccesses++;
                 dataMisses++;
+            } else {
+                insertIntoCache(hexAddress, 0);
             }
         }
 
@@ -328,10 +379,12 @@ class Main{
                     }
                 }
             }
-            for (LinkedList<Block> list : instructionCache.values()) {
-                for (Block block : list) {
-                    if(block.isDirty()){
-                        allCopies += (blockSize/4);
+            if(cacheMode.equals(CacheMode.SEPARATED.value)){
+                for (LinkedList<Block> list : instructionCache.values()) {
+                    for (Block block : list) {
+                        if(block.isDirty()){
+                            allCopies += (blockSize/4);
+                        }
                     }
                 }
             }
