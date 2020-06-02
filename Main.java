@@ -104,6 +104,8 @@ class Main{
         HashMap<Integer, LinkedList<Block>> dataCache;
         HashMap<Integer, LinkedList<Block>> instructionCache;
 
+        private boolean isWriting;
+
         public Cache(int cacheMode, int cacheDataSize, int cacheInstructionSize, int blockSize, int associativity, String writePolicy, String allocatePolicy){
             this.cacheMode = CacheMode.valueOf(cacheMode);
             this.cacheDataSize = cacheDataSize;
@@ -113,10 +115,11 @@ class Main{
             this.writePolicy = WritePolicy.valueof(writePolicy);
             this.allocatePolicy = AllocatePolicy.valueof(allocatePolicy);
 
-            dataCache = new HashMap<>(); //use LinkedHashmap to make it faster
-            if(cacheMode == CacheMode.SEPARATED.value){
-                instructionCache = new HashMap<>();
-            }
+            dataCache = new HashMap<Integer, LinkedList<Block>>(); //use LinkedHashmap to make it faster
+            instructionCache = new HashMap<Integer, LinkedList<Block>>();
+            // if(cacheMode == CacheMode.SEPARATED.value){
+            //     instructionCache = new HashMap<Integer, LinkedList<Block>>();
+            // }
 
             instructionsAccesses = 0;
             instructionsMisses = 0;
@@ -128,6 +131,8 @@ class Main{
 
             allFetch = 0;
             allCopies = 0;
+
+            isWriting = false;
         }
 
         private void insertIntoCache(String hexAddress, int request){
@@ -143,7 +148,9 @@ class Main{
             int tag = (int)Math.floor((double)(intAddress / blockSize));
             int index = tag % (cacheDataSize / (blockSize * associativity));
             Block block = new Block(true, false, tag);
-
+            if(writePolicy.equals(WritePolicy.WRITE_BACK) && allocatePolicy.equals(AllocatePolicy.WRITE_ALLOCATION) && isWriting){
+                block.setDirty(true);
+            }
             if(request == 0){
                 if(dataCache.keySet().contains(index)){
                     for (Block bl : dataCache.get(index)) {
@@ -158,16 +165,24 @@ class Main{
                     if(dataCache.get(index).size() == associativity){
                         dataMisses++;
                         dataReplaces++;
-                        dataCache.get(index).removeFirst();
+                        allFetch++;
+                        Block deletingBlock = dataCache.get(index).removeFirst();
+                        if(writePolicy.equals(WritePolicy.WRITE_BACK)){
+                            if(deletingBlock.isDirty()){
+                                allCopies += (blockSize/4);
+                                deletingBlock.setDirty(false);
+                            }
+                        }
                         dataCache.get(index).addLast(block);
-    
                     } else if(dataCache.get(index).size() < associativity){
                         dataMisses++;
+                        allFetch++;
                         dataCache.get(index).addLast(block);
                     }
                 } else {// when totally address doesn't exsits 
                     dataMisses++;
-                    dataCache.put(index, new LinkedList<>());
+                    allFetch++;
+                    dataCache.put(index, new LinkedList<Block>());
                     dataCache.get(index).add(block);
                 }
             } else{
@@ -183,17 +198,25 @@ class Main{
                     // in this if else we face miss in read
                     if(instructionCache.get(index).size() == associativity){
                         instructionsMisses++;
-                        instructionsMisses++;
-                        instructionCache.get(index).removeFirst();
+                        instructionsReplaces++;
+                        allFetch++;
+                        Block deletingBlock = instructionCache.get(index).removeFirst();
+                        if(writePolicy.equals(WritePolicy.WRITE_BACK)){
+                            if(deletingBlock.isDirty()){
+                                allCopies += (blockSize/4);
+                                deletingBlock.setDirty(false);
+                            }
+                        }
                         instructionCache.get(index).addLast(block);
-    
                     } else if(instructionCache.get(index).size() < associativity){
                         instructionsMisses++;
+                        allFetch++;
                         instructionCache.get(index).addLast(block);
                     }
                 } else {// when totally address doesn't exsits
                     instructionsMisses++;
-                    instructionCache.put(index, new LinkedList<>());
+                    allFetch++;
+                    instructionCache.put(index, new LinkedList<Block>());
                     instructionCache.get(index).add(block);
                 }
             }
@@ -254,7 +277,9 @@ class Main{
                     }
                 }
             } else {
+                isWriting = true;
                 insertIntoCache(hexAddress, 0);
+                isWriting = false;
             }
         }
 
@@ -263,20 +288,53 @@ class Main{
 
             int tag = (int)Math.floor((double)(intAddress / blockSize));
             int index = tag % (cacheDataSize / (blockSize * associativity));
+
+            dataAccesses++;
+            if(hit(hexAddress)){
+                for (Block block : dataCache.get(index)) {
+                    if(block.getTag() == tag){//hit
+                        block.setDirty(true);
+                        break;
+                    }
+                }
+            } else {
+                dataMisses++;
+                allCopies++;
+            }
         }
 
         private void writeThroughAllocate(String hexAddress){
-            int intAddress = Integer.parseInt(hexAddress, 16);
-
-            int tag = (int)Math.floor((double)(intAddress / blockSize));
-            int index = tag % (cacheDataSize / (blockSize * associativity));
+            allCopies++;
+            if(hit(hexAddress)){
+                dataAccesses++;
+            } else {
+                insertIntoCache(hexAddress, 0);
+            }
         }
 
         private void writeThroughNoAllocate(String hexAddress){
-            int intAddress = Integer.parseInt(hexAddress, 16);
+            allCopies++;
+            dataAccesses++;
+            if(!hit(hexAddress)){
+                dataMisses++;
+            }
+        }
 
-            int tag = (int)Math.floor((double)(intAddress / blockSize));
-            int index = tag % (cacheDataSize / (blockSize * associativity));
+        public void finalCheck(){
+            for (LinkedList<Block> list : dataCache.values()) {
+                for (Block block : list) {
+                    if(block.isDirty()){
+                        allCopies += (blockSize/4);
+                    }
+                }
+            }
+            for (LinkedList<Block> list : instructionCache.values()) {
+                for (Block block : list) {
+                    if(block.isDirty()){
+                        allCopies += (blockSize/4);
+                    }
+                }
+            }
         }
 
         @Override
@@ -316,7 +374,7 @@ class Main{
             result = result + "miss rate: " + String.format("%.4f ", ((double)dataMisses)/((double)dataAccesses)) + "(hit rate " + String.format("%.4f)", 1 - ((double)dataMisses)/((double)dataAccesses)) + "\n";
             result = result + "replace: " + dataReplaces + "\n";
             result = result + "TRAFFIC (in words)\n";
-            result = result + "demand fetch: " + allFetch + "\n";
+            result = result + "demand fetch: " + allFetch*(blockSize/4) + "\n";
             result = result + "copies back: " + allCopies + "\n";
 
             return result;
@@ -370,17 +428,18 @@ class Main{
         } else{
             cache = main.new Cache(Integer.parseInt(firstLine[1].trim()), Integer.parseInt(secondLine[1].trim()), Integer.parseInt(secondLine[0].trim()), Integer.parseInt(firstLine[0].trim()), Integer.parseInt(firstLine[2].trim()), firstLine[3].trim(), firstLine[4].trim());
         }
-        
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+
         String input;
-    
-        try{
-            while(!(input = br.readLine()).equals("")){
+        while(scan.hasNextLine()){
+            input = scan.nextLine();
+            if(!input.equals("")){
                 cache.readCacheLine(input.split(" ")[1], Integer.parseInt(input.split("")[0]));
+            } else {
+                break;
             }
-        } catch(IOException e){
-            e.printStackTrace();
         }
+        scan.close();
+        cache.finalCheck();
         System.out.println(cache);       
     }
 }
