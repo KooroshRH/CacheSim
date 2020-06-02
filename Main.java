@@ -186,7 +186,7 @@ class Main{
                     dataCache.get(index).add(block);
                 }
             } else {
-                if(cacheMode.equals(CacheMode.SEPARATED.value)){
+                if(cacheMode.value == 1){
                     int intAddress = Integer.parseInt(hexAddress, 16);
 
                     int tag = (int)Math.floor((double)(intAddress / blockSize));
